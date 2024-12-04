@@ -24,8 +24,15 @@ def download_original_data(is_train='train'):
     original_test_data_file_id = '16jSMsYZOI8QU-g0_TgqWbxzuzauSKCBQ'
     test_url = f'https://drive.google.com/uc?id={original_test_data_file_id}'
 
-    gdown.download(train_url, original_train_data_path, quiet=False)
-    gdown.download(test_url, original_test_data_path, quiet=False)
+    # Check if files already exist
+    if not os.path.exists(original_train_data_path):
+        gdown.download(train_url, original_train_data_path, quiet=False)
+    else:
+        print('Train data already exists, skipping download.')
+    if not os.path.exists(original_test_data_path):
+        gdown.download(test_url, original_test_data_path, quiet=False)
+    else:
+        print('Test data already exists, skipping download.')
 
 def random_rotation(point, angle_degrees, rand_axis):
     # Generate a random rotation vector
@@ -38,6 +45,16 @@ def random_rotation(point, angle_degrees, rand_axis):
     # Rotate the point
     rotated_point = rotation.apply(point)
     return rotated_point
+
+# Function to apply random rotation and translation to a point
+def random_rotation_and_translation(point, angle_degrees, rand_axis, translation_vector):
+    # Apply rotation using the existing random_rotation function
+    rotated_point = random_rotation(point, angle_degrees, rand_axis)
+    
+    # Apply translation by adding the translation vector to the rotated point
+    translated_point = rotated_point + translation_vector
+    
+    return translated_point
 
 # Curate datasets from the original data
 def curate_datasets():
@@ -134,19 +151,33 @@ def curate_datasets():
                     # Fill the padded array
                     # for i, row in enumerate(source_pcds):
                         # padded_source_pcds[i, :len(row)] = row  # Only fill the non-padded part
-                    transforms = []
+                    transformations = []
+                    # each layer is a whole pointcloud
+                    # each row is a single point
                     for i, layer in enumerate(source_pcds):
                         for j, row in enumerate(layer):
                             padded_source_pcds[i, j, :len(row)] = row  # Fill with the row values
                     for i, layer in enumerate(target_pcds):
                         # define rotation/translation
                         rand_axis = np.random.rand(3)
-                        # translation_vector = np.random.uniform(0, 1, 3)
-                        transforms.append(rand_axis)
+                        angle = np.random.uniform(0, 360)  # Random angle between 0 and 360 degrees
+                        rand_axis /= np.linalg.norm(rand_axis)  # Normalize axis
+                        # print(rand_axis.append(angle))
+                        # Generate a random translation vector (can be within a certain range)
+                        translation_vector = np.random.uniform(-1, 1, 3)  # Random translation in each direction (-1 to 1)
+                        rot_and_angle = rand_axis[:]
+                        rot_and_angle = np.append(rot_and_angle, angle)
+                        rot_and_trans = np.append(rot_and_angle, translation_vector)  # Append translation vector
+                        # print(rot_and_angle)
+                        transformations.append(rot_and_trans)
+                        # transformations.append([rand_axis, angle])
+                        # transformations.append(rand_axis)
                         for j, row in enumerate(layer):
                             # ... = row * rotation/translation
                             # padded_target_pcds[i, j, :len(row)] = row  # Fill with the row values
-                            padded_target_pcds[i, j, :len(row)] = random_rotation(row, 45, rand_axis)  # Fill with the row values
+                            # padded_target_pcds[i, j, :len(row)] = row
+                            # continue
+                            padded_target_pcds[i, j, :len(row)] = random_rotation_and_translation(row, angle, rand_axis, translation_vector)  # Fill with the row values
 
                     # print(padded_source_pcds)
                     # source_pcds = np.array([np.pad(row, (0, max_length - len(row)), mode='constant', constant_values=np.nan) for row in source_pcds])
@@ -155,8 +186,8 @@ def curate_datasets():
                     # print(f'Saved Training data for +/-{noise_level/2}% noise and lower overlap bound {lower_bound} to {data_path}')
                     # new_file.create_dataset(f'{lower_bound}/noise_{noise_level}/tgt', data=target_pcds)
                     new_file.create_dataset(f'{lower_bound}/noise_{noise_level}/tgt', data=padded_target_pcds)
-                    # Save transforms
-                    new_file.create_dataset(f'{lower_bound}/noise_{noise_level}/transforms', data=transforms)
+                    # Save transformations
+                    new_file.create_dataset(f'{lower_bound}/noise_{noise_level}/transformations', data=transformations)
                     print(f'Saved data for +/-{noise_level/2}% noise and lower overlap bound {lower_bound}% to {data_path}')
 
     
@@ -168,7 +199,7 @@ def curate_datasets():
 
 
 # Download the original data
-# download_original_data()
+download_original_data()
 # Curate datasets from the original data
 curate_datasets()
 
